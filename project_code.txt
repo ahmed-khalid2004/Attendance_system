@@ -1,0 +1,2749 @@
+﻿===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\Controllers\AttendaceReportController.cs =====
+using BussinessLogic.ServicesAbstraction;
+using BussinessLogic.ViewModels;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Attendance_system.web.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class AttendaceReportController : ControllerBase
+    {
+        private readonly IAttendanceService _attendanceService;
+
+        public AttendaceReportController(IAttendanceService attendanceService)
+        {
+            _attendanceService = attendanceService;
+        }
+
+        [Authorize(Roles = "LineManager")]
+        [HttpGet("employee/{employeeId}")]
+        public async Task<IActionResult> GetEmployeeAttendanceReport(int employeeId)
+        {
+            var report = await _attendanceService.GetEmployeeAttendanceReport(employeeId);
+            if (report == null)
+            {
+                var notFoundResponse = new ApiResponse<object>
+                {
+                    Code = 404,
+                    Status = "Not Found",
+                    Message = "Employee not found or no attendance records available.",
+                    Data = null
+                };
+                return NotFound(notFoundResponse);
+            }
+            var successResponse = new ApiResponse<object>
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Attendance report retrieved successfully.",
+                Data = report
+            };
+            return Ok(successResponse);
+        }
+
+
+        [Authorize(Roles = "CEO")]
+        [HttpGet("manager-report/{managerId}")]
+        public async Task<IActionResult> GetManagerAttendanceReport(int managerId)
+        {
+            var reports = await _attendanceService.GetReportsForManager(managerId);
+
+            if (reports == null || !reports.Any())
+            {
+                var notFoundResponse = new ApiResponse<object>
+                {
+                    Code = 404,
+                    Status = "Not Found",
+                    Message = "No attendance reports found for this manager.",
+                    Data = null
+                };
+
+                return NotFound(notFoundResponse);
+            }
+
+            var successResponse = new ApiResponse<object>
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Attendance reports retrieved successfully.",
+                Data = reports
+            };
+
+            return Ok(successResponse);
+        }
+
+        [Authorize(Roles = "DepartmentManager")]
+        [HttpGet("department-manager/line-manager-summaries")]
+        public async Task<IActionResult> GetLineManagerSummaries(
+            [FromQuery] int departmentManagerId,
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate)
+        {
+            if (startDate > endDate)
+            {
+                return BadRequest(new ApiResponse<object>
+                {
+                    Code = 400,
+                    Status = "Bad Request",
+                    Message = "Start date cannot be later than end date.",
+                    Data = null
+                });
+            }
+
+            var summaries = await _attendanceService.GetLineManagerSummariesByDepartmentManagerAsync(departmentManagerId, startDate, endDate);
+
+            if (summaries == null || !summaries.Any())
+            {
+                return NotFound(new ApiResponse<object>
+                {
+                    Code = 404,
+                    Status = "Not Found",
+                    Message = "No line manager summaries found for this department manager.",
+                    Data = null
+                });
+            }
+
+            return Ok(new ApiResponse<object>
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Line manager summaries retrieved successfully.",
+                Data = summaries
+            });
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpGet("ceo/department-summaries")]
+        public async Task<IActionResult> GetDepartmentSummariesForCeo([FromQuery] DateTime startDate,[FromQuery] DateTime endDate)
+        {
+            if (startDate > endDate)
+            {
+                return BadRequest(new ApiResponse<object>
+                {
+                    Code = 400,
+                    Status = "Bad Request",
+                    Message = "Start date cannot be later than end date.",
+                    Data = null
+                });
+            }
+
+            var summaries = await _attendanceService.GetDepartmentSummariesForCeoAsync(startDate, endDate);
+
+            if (summaries == null || !summaries.Any())
+            {
+                return NotFound(new ApiResponse<object>
+                {
+                    Code = 404,
+                    Status = "Not Found",
+                    Message = "No department summaries found.",
+                    Data = null
+                });
+            }
+
+            return Ok(new ApiResponse<object>
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Department summaries retrieved successfully.",
+                Data = summaries
+            });
+        }
+
+
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\Controllers\AuthController.cs =====
+using BussinessLogic.Models._EmployeeDto;
+using BussinessLogic.ServicesAbstraction;
+using BussinessLogic.ViewModels;
+using Microsoft.AspNetCore.Mvc;
+using System.Threading.Tasks;
+
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
+{
+    private readonly IAuthService _authService;
+
+    public AuthController(IAuthService authService)
+    {
+        _authService = authService;
+    }
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] CreatedEmployeeDto dto)
+    {
+        var response = await _authService.Register(dto);
+        return StatusCode(response.Code, response);
+    }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login(string username, string password)
+    {
+        var response = await _authService.Login(username, password);
+        return StatusCode(response.Code, response);
+    }
+
+
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\Controllers\DapartmentController.cs =====
+using BussinessLogic.Models._DepartmentDto;
+using BussinessLogic.ServicesAbstraction;
+using BussinessLogic.ViewModels;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Attendance_system.web.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class DepartmentController : ControllerBase
+    {
+        private readonly IDepartmentService _departmentService;
+
+        public DepartmentController(IDepartmentService departmentService)
+        {
+            _departmentService = departmentService;
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpGet("GetAllDepartments")]
+        public IActionResult GetAllDepartments()
+        {
+            var result = _departmentService.GetAllDepartments();
+            var response = new ApiResponse<IEnumerable<DepartmentDetailsDto>>()
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Departments retrieved successfully",
+                Data = result
+            };
+            return Ok(response);
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpGet("GetDepartmentById/{id}")]
+        public async Task<IActionResult> GetDepartmentById(int id)
+        {
+            var result = await _departmentService.GetByIdAsync(id);
+            if (result == null)
+            {
+                return NotFound(new ApiResponse<string>
+                {
+                    Code = 404,
+                    Status = "Error",
+                    Message = "Department not found",
+                    Data = null
+                });
+            }
+
+            var response = new ApiResponse<DepartmentDetailsDto>()
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Department retrieved successfully",
+                Data = result
+            };
+            return Ok(response);
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpPost("CreateDepartment")]
+        public async Task<IActionResult> CreateDepartment([FromBody] CreatedDepartmentDto dto)
+        {
+            var newDeptId = await _departmentService.CreateDepartment(dto);
+
+            var response = new ApiResponse<int>()
+            {
+                Code = 201,
+                Status = "Success",
+                Message = "Department created successfully",
+                Data = newDeptId
+            };
+            return CreatedAtAction(nameof(GetDepartmentById), new { id = newDeptId }, response);
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpPut("UpdateDepartment/{id}")]
+        public async Task<IActionResult> UpdateDepartment(int id, [FromBody] UpdatedDepartmentDto model)
+        {
+            var result = await _departmentService.UpdateDepartment(model, id);
+
+            var response = new ApiResponse<string>()
+            {
+                Code = result ? 200 : 400,
+                Status = result ? "Success" : "Error",
+                Message = result ? "Department updated successfully" : "Update failed",
+                Data = null
+            };
+
+            return Ok(response);
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpDelete("DeleteDepartment/{id}")]
+        public async Task<IActionResult> DeleteDepartment(int id)
+        {
+            var result = await _departmentService.DeleteDepartment(id);
+
+            var response = new ApiResponse<string>()
+            {
+                Code = result ? 200 : 404,
+                Status = result ? "Success" : "Error",
+                Message = result ? "Department deleted successfully" : "Department not found",
+                Data = null
+            };
+
+            return Ok(response);
+        }
+
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\Controllers\EmployeeController.cs =====
+using BussinessLogic.Models._EmployeeDto;
+using BussinessLogic.ServicesAbstraction;
+using BussinessLogic.ViewModels;
+using DataAccess.Data._UnitOfWork;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using System.Collections.Generic;
+
+namespace Attendance_system.web.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class EmployeeController : ControllerBase
+    {
+        private readonly IEmployeeServices _employeeServices;
+
+        public EmployeeController(IEmployeeServices employeeServices)
+        {
+            _employeeServices = employeeServices;
+        }
+
+        [Authorize(Roles = "DepartmentManager,LineManager")]
+        [HttpGet]
+        public ActionResult GetAllEmployees()
+        {
+            var employees = _employeeServices.GetAllEmployees();
+            var response = new ApiResponse<IEnumerable<EmployeeDetailsDto>> 
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Employees retrieved successfully",
+                Data = employees
+            };
+
+            return Ok(response);
+        }
+
+        [Authorize(Roles = "DepartmentManager,LineManager")]
+        [HttpGet("{id}")]
+        public async Task<ActionResult> GetEmployeeById(int id)
+        {
+            var employee = await _employeeServices.GetEmployeeById(id);
+            if (employee == null)
+            {
+                var notFoundResponse = new ApiResponse<EmployeeDetailsDto>
+                {
+                    Code = 404,
+                    Status = "Error",
+                    Message = "Employee not found",
+                    Data = null
+                };
+                return NotFound(notFoundResponse);
+            }
+            var response = new ApiResponse<EmployeeDetailsDto>
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Employee retrieved successfully",
+                Data = employee
+            };
+            return Ok(response);
+        }
+
+        [Authorize(Roles = "DepartmentManager,LineManager")]
+        [HttpPost]
+        public async Task<ActionResult> CreateEmployee([FromBody] CreatedEmployeeDto employee)
+        {
+            var createdEmployeeId = await _employeeServices.CreateEmployee(employee);
+
+            var response = new ApiResponse<int>
+            {
+                Code = 201,
+                Status = "Success",
+                Message = "Employee created successfully",
+                Data = createdEmployeeId
+            };
+            return await Task.FromResult<ActionResult>(CreatedAtAction(nameof(GetEmployeeById), new { id = createdEmployeeId }, response));
+        }
+
+        [Authorize(Roles = "DepartmentManager,LineManager")]
+        [HttpPut("{id}")]
+        public async Task<ActionResult> UpdateEmployee([FromBody] UpdatedEmployeeDto employee, int id)
+        {
+            var updatedEmployeeId = await _employeeServices.UpdateEmployee(employee, id);
+            if (updatedEmployeeId == 0)
+            {
+                var notFoundResponse = new ApiResponse<int>
+                {
+                    Code = 404,
+                    Status = "Error",
+                    Message = "Employee not found",
+                    Data = 0
+                };
+                return NotFound(notFoundResponse);
+            }
+            var response = new ApiResponse<int>
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Employee updated successfully",
+                Data = updatedEmployeeId
+            };
+            return Ok(response);
+        }
+
+        [Authorize(Roles = "DepartmentManager,LineManager")]
+        [HttpDelete("{id}")]
+        public async Task<ActionResult> DeleteEmployee(int id)
+        {
+            var isDeleted = await _employeeServices.DeleteEmployee(id);
+            if (!isDeleted)
+            {
+                var notFoundResponse = new ApiResponse<bool>
+                {
+                    Code = 404,
+                    Status = "Error",
+                    Message = "Employee not found",
+                    Data = false
+                };
+                return NotFound(notFoundResponse);
+            }
+            var response = new ApiResponse<bool>
+            {
+                Code = 200,
+                Status = "Success",
+                Message = "Employee deleted successfully",
+                Data = true
+            };
+            return Ok(response);
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\Controllers\SubCompanyController.cs =====
+using BussinessLogic.Models._SubCompanyDto;
+using BussinessLogic.ServicesAbstraction;
+using BussinessLogic.ViewModels;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Attendance_system.web.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class SubCompanyController : ControllerBase
+    {
+        private readonly ISub_CompanyService _subCompanyService;
+
+        public SubCompanyController(ISub_CompanyService subCompanyService)
+        {
+            _subCompanyService = subCompanyService;
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpGet("GetAll")]
+        public async Task<IActionResult> GetAll()
+        {
+            var result = await _subCompanyService.GetAllAsync();
+
+            var response = new ApiResponse<IEnumerable<SubCompanyDetailsDto>>()
+            {
+                Code = result.Any() ? 200 : 404,
+                Status = result.Any() ? "Success" : "Not Found",
+                Message = result.Any() ? "SubCompanies retrieved successfully" : "No subcompanies found",
+                Data = result
+            };
+
+            return StatusCode(response.Code, response);
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpGet("GetById/{id}")]
+        public async Task<IActionResult> GetById(int id)
+        {
+            var result = await _subCompanyService.GetByIdAsync(id);
+
+            var response = new ApiResponse<SubCompanyDetailsDto?>()
+            {
+                Code = result is not null ? 200 : 404,
+                Status = result is not null ? "Success" : "Error",
+                Message = result is not null ? "SubCompany retrieved successfully" : "SubCompany not found",
+                Data = result
+            };
+
+            return StatusCode(response.Code, response);
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpPost("Create")]
+        public async Task<IActionResult> Create([FromBody] CreatedSubCompanyDto dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new ApiResponse<string>()
+                {
+                    Code = 400,
+                    Status = "Error",
+                    Message = "Invalid subcompany data",
+                    Data = null
+                });
+            }
+
+            var createdId = await _subCompanyService.AddAsync(dto);
+
+            var response = new ApiResponse<int>()
+            {
+                Code = 201,
+                Status = "Success",
+                Message = "SubCompany created successfully",
+                Data = createdId
+            };
+
+            return StatusCode(201, response);
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpPut("Update/{id}")]
+        public async Task<IActionResult> Update(int id, [FromBody] UpdatedSubCompanyDto dto)
+        {
+            var result = await _subCompanyService.UpdateAsync(id, dto);
+
+            var response = new ApiResponse<string>()
+            {
+                Code = result ? 200 : 400,
+                Status = result ? "Success" : "Error",
+                Message = result ? "SubCompany updated successfully" : "Update failed",
+                Data = null
+            };
+
+            return StatusCode(response.Code, response);
+        }
+
+        [Authorize(Roles = "CEO")]
+        [HttpDelete("Delete/{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var result = await _subCompanyService.DeleteAsync(id);
+
+            var response = new ApiResponse<string>()
+            {
+                Code = result ? 200 : 404,
+                Status = result ? "Success" : "Error",
+                Message = result ? "SubCompany deleted successfully" : "SubCompany not found",
+                Data = null
+            };
+
+            return StatusCode(response.Code, response);
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\Middlewares\ErrorHandling.cs =====
+using BussinessLogic.ViewModels;
+using System.Net;
+using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;  
+
+public class ErrorHandling
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<ErrorHandling> _logger;
+    private readonly IWebHostEnvironment _env;
+
+    public ErrorHandling(RequestDelegate next, ILogger<ErrorHandling> logger, IWebHostEnvironment env)
+    {
+        _next = next;
+        _logger = logger;
+        _env = env;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled exception occurred.");
+
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+
+            var response = new ApiResponse<string>
+            {
+                Code = context.Response.StatusCode,
+                Status = "Error",
+                Message = ex.Message,
+                Data = null
+            };
+
+            if (_env.IsDevelopment())
+            {
+                response.Data = ex.StackTrace;
+            }
+
+            var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response, options));
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\Properties\launchSettings.json =====
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:51215",
+      "sslPort": 44379
+    }
+  },
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:5038",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "https://localhost:7055;http://localhost:5038",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "IIS Express": {
+      "commandName": "IISExpress",
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\appsettings.Development.json =====
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\appsettings.json =====
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "DefualtConnection": "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=Attendance_System;Integrated Security=True"
+  },
+  "Jwt": {
+    "Key": "KvXODmG1pKrhg/IVa4Uzc/+j9y4GjTcRC9sXoEerIr37IAy0o9CYM44zZ1hCRcGW",
+    "Issuer": "AttendanceSystem",
+    "Audience": "AttendanceSystemUsers"
+  }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\Attendance_system.web.csproj =====
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.20" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.20" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+	<ProjectReference Include="..\BussinessLogic\BussinessLogic.csproj" />
+  </ItemGroup>
+
+</Project>
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\Attendance_system\Program.cs =====
+using BussinessLogic.Services;
+using BussinessLogic.ServicesAbstraction;
+using DataAccess.Data._UnitOfWork;
+using DataAccess.Data.Repositories._AttendanceRepository;
+using DataAccess.Data.Repositories._DepartmentRepository;
+using DataAccess.Data.Repositories._EmployeeRepository;
+using DataAccess.Data.Repositories._GenericRepository;
+using DataAccess.Data.Repositories._SubCRepository;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
+using System.Text;
+
+namespace Attendance_system
+{
+    public class Program
+    {
+        public static void Main(string[] args)
+        {
+            var builder = WebApplication.CreateBuilder(args);
+
+            // Add services to the container.
+
+            builder.Services.AddControllers();
+            builder.Services.AddEndpointsApiExplorer();
+
+            builder.Services.AddSwaggerGen(c =>
+            {
+                c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                    Description = "Please enter token with Bearer prefix",
+                    Name = "Authorization",
+                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+                    Scheme = "Bearer"
+                });
+
+                c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+                {
+                    {
+                        new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                        {
+                            Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                            {
+                                Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            },
+                            Scheme = "oauth2",
+                            Name = "Bearer",
+                            In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                        },
+                        new List<string>()
+                    }
+                });
+            });
+
+            builder.Services.AddDbContext<Attendance_SystemContext>(option =>
+            {
+                option.UseSqlServer(builder.Configuration.GetConnectionString("DefualtConnection"));
+            });
+
+            builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+            builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+            builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
+            builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+            builder.Services.AddScoped<ISubCompanyRepository, SubCompanyRepository>();
+            builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+
+            builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+            builder.Services.AddScoped<ISub_CompanyService, Sub_CompanyService>();
+            builder.Services.AddScoped<IEmployeeServices, EmployeeServices>();
+            builder.Services.AddScoped<IAttendanceService, AttendanceService>();
+            builder.Services.AddScoped<IAuthService, AuthService>();
+
+
+            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+     .AddJwtBearer(options =>
+     {
+         options.TokenValidationParameters = new TokenValidationParameters
+         {
+             ValidateIssuer = true,
+             ValidateAudience = true,
+             ValidateLifetime = true,
+             ValidateIssuerSigningKey = true,
+             ValidIssuer = builder.Configuration["Jwt:Issuer"],
+             ValidAudience = builder.Configuration["Jwt:Audience"],
+             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])),
+             RoleClaimType = ClaimTypes.Role 
+         };
+     });
+
+
+
+            var app = builder.Build();
+
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+                app.UseSwagger();
+                app.UseSwaggerUI();
+            }
+
+            app.UseMiddleware<ErrorHandling>();
+
+            app.UseHttpsRedirection();
+
+            app.UseAuthentication();
+            app.UseAuthorization();
+
+            app.MapControllers();
+
+            app.Run();
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\AuthDto\LoginDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models.LoginDto
+{
+    public class LoginDto
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+    }
+
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\AuthDto\RegisterDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models.AuthDto
+{
+    public class RegisterDto
+    {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Emp_Phone { get; set; }
+        public string Email { get; set; }
+        public string UserName { get; set; }
+        public string Password { get; set; }
+        public string Role { get; set; }   
+        public int? Dept_Id { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_AttendanceDto\AttendanceRecordDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._AttendanceDto
+{
+    public class AttendanceRecordDto
+    {
+        public DateOnly Date { get; set; }
+        public DateTime? CheckIn { get; set; }
+        public DateTime? CheckOut { get; set; }
+        public bool IsLate { get; set; }
+        public bool IsAbsent { get; set; }
+        public string Status { get; set; }
+        public decimal DayDeduction { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_AttendanceDto\DepartmentSummaryForCeoDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._AttendanceDto
+{
+    public class DepartmentSummaryForCeoDto
+    {
+        public int DepartmentId { get; set; }
+        public string DepartmentName { get; set; }
+        public int TotalEmployees { get; set; }
+        public decimal PercentAbsent { get; set; }
+        public decimal PercentLate { get; set; }
+        public DateTime ReportDate { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_AttendanceDto\EmployeeAttendanceReportDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._AttendanceDto
+{
+    public class EmployeeAttendanceReportDto
+    {
+        public int EmployeeId { get; set; }
+        public string FullName { get; set; }
+        public int TotalDays { get; set; }
+        public int DaysPresent { get; set; }
+        public int DaysAbsent { get; set; }
+        public int DaysLate { get; set; }
+
+
+        public decimal TotalDeduction { get; set; }
+        public List<AttendanceRecordDto> Records { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_AttendanceDto\LineManagerTeamSummaryDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._AttendanceDto
+{
+    public class LineManagerTeamSummaryDto
+    {
+        public int LineManagerId { get; set; }
+        public string LineManagerName { get; set; }
+        public int TotalEmployees { get; set; }
+        public decimal PercentAbsent { get; set; }
+        public decimal PercentLate { get; set; }
+        public DateTime ReportDate { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_DepartmentDto\CreatedDepartmentDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._DepartmentDto
+{
+    public class CreatedDepartmentDto
+    {
+        public string dept_name { get; set; }
+        public int sub_id { get; set; }
+        public int? Manager_Id { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_DepartmentDto\DepartmentDetailsDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._DepartmentDto
+{
+    public class DepartmentDetailsDto
+    {
+        public int Id { get; set; }
+        public string dept_name { get; set; }
+        public int subCompany_id { get; set; }
+        public string subCompanyName { get; set; }
+        public int? Manager_Id { get; set; }
+        public string? ManagerName { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_DepartmentDto\UpdatedDepartmentDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._DepartmentDto
+{
+    public class UpdatedDepartmentDto
+    {
+        public string? dept_name { get; set; }
+
+        public int sub_id { get; set; }
+        public int? Manager_Id { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_EmployeeDto\CreatedEmployeeDto.cs =====
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Entities;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._EmployeeDto
+{
+    public class CreatedEmployeeDto
+    {
+
+        [MaxLength(50, ErrorMessage = "Max length of Name is 50 Chars")]
+        [MinLength(3, ErrorMessage = "Min length of Name is 3 Chars")]
+        public string FirstName { get; set; }
+
+        [MaxLength(50, ErrorMessage = "Max length of Name is 50 Chars")]
+        [MinLength(3, ErrorMessage = "Min length of Name is 3 Chars")]
+        public string LastName { get; set; }
+
+        [Phone]
+        public string? Emp_Phone { get; set; }
+
+        [EmailAddress]
+        public string Email { get; set; }
+
+        public string Role { get; set; } = "Employee";
+
+        public DateTime Hire_Date { get; set; } = DateTime.Now;
+        public bool Is_Manager { get; set; }
+        public int? Line_Manager_Id { get; set; }    
+
+        public string UserName { get; set; }
+
+        public string Password { get; set; }
+
+        public int? Dept_Id { get; set; }
+
+    }
+}
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_EmployeeDto\EmployeeDetailsDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._EmployeeDto
+{
+    public class EmployeeDetailsDto
+    {
+        [Required]
+        public int Emp_Id { get; set; }
+
+        public string FirstName { get; set; }
+
+        public string LastName { get; set; }
+
+        public string? Emp_Phone { get; set; }
+
+        public string Email { get; set; }
+
+        public string Role { get; set; }
+        public bool? Is_Manager { get; set; }
+        public int? Line_Manager_Id { get; set; }
+
+        public int? Dept_Id { get; set; }
+        public string? Department { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_EmployeeDto\UpdatedEmployeeDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._EmployeeDto
+{
+    public class UpdatedEmployeeDto
+    {
+
+        [MaxLength(50, ErrorMessage = "Max length of Name is 50 Chars")]
+        [MinLength(3, ErrorMessage = "Min length of Name is 3 Chars")]
+        public string FirstName { get; set; }
+
+        [MaxLength(50, ErrorMessage = "Max length of Name is 50 Chars")]
+        [MinLength(3, ErrorMessage = "Min length of Name is 3 Chars")]
+        public string LastName { get; set; }
+
+        [Phone]
+        public string? Emp_Phone { get; set; }
+
+        [EmailAddress]
+        public string Email { get; set; }
+
+        public string Role { get; set; }
+        public bool Is_Manager { get; set; }
+        public int? Line_Manager_Id { get; set; }
+
+        public string UserName { get; set; }
+
+        public string Password { get; set; }
+
+        public int? Dept_Id { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_ManagerSummary\ManagerAttendanceSummaryDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._ManagerSummary
+{
+    public class ManagerAttendanceSummaryDto
+    {
+        public int ManagerId { get; set; }
+        public string ManagerName { get; set; }
+
+        public int TotalEmployees { get; set; }
+        public decimal PercentAbsent { get; set; }
+        public decimal PercentLate { get; set; }
+
+        public DateTime ReportDate { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_SubCompanyDto\CreatedSubCompanyDto.cs =====
+using DataAccess.Data.DbContext;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._SubCompanyDto
+{
+    public class CreatedSubCompanyDto
+    {
+        public string Company_Name { get; set; }
+
+        public string Company_Address { get; set; }
+
+        public int? Company_Phone { get; set; }
+
+        public int CEO_Id { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_SubCompanyDto\SubCompanyDetailsDto.cs =====
+using DataAccess.Data.DbContext;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._SubCompanyDto
+{
+    public class SubCompanyDetailsDto
+    {
+        public int Company_Id { get; set; }
+
+        public string Company_Name { get; set; }
+
+        public string Company_Address { get; set; }
+
+        [Phone]
+        public int? Company_Phone { get; set; }
+
+        public int CEO_Id { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Models\_SubCompanyDto\UpdatedSubCompanyDto.cs =====
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Models._SubCompanyDto
+{
+    public class UpdatedSubCompanyDto
+    {
+        public string Company_Name { get; set; }
+
+        public string Company_Address { get; set; }
+
+        public int? Company_Phone { get; set; }
+
+        public int CEO_Id { get; set; }
+
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Services\AttendanceService.cs =====
+using BussinessLogic.Models._AttendanceDto;
+using BussinessLogic.Models._ManagerSummary;
+using BussinessLogic.ServicesAbstraction;
+using DataAccess.Data._UnitOfWork;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Services
+{
+    public class AttendanceService : IAttendanceService
+    {
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly Attendance_SystemContext _context;
+
+        public AttendanceService(IUnitOfWork unitOfWork, Attendance_SystemContext context)
+        {
+            _unitOfWork = unitOfWork;
+            _context = context;
+        }
+
+        public async Task<EmployeeAttendanceReportDto?> GetEmployeeAttendanceReport(int employeeId)
+        {
+            var employee = await _unitOfWork.EmployeeRepository.GetByIdAsync(employeeId);
+            if (employee == null)
+                return null;
+
+            var records = await GetAttendanceRecordsFromSP(employeeId);
+
+            foreach (var record in records)
+            {
+                record.DayDeduction = record.IsAbsent
+                    ? 1m
+                    : (record.CheckIn.HasValue ? CalculateDayDeduction(record.CheckIn.Value) : 1m);
+            }
+            ApplyMonthlyAbsenceRules(records);
+            ApplyYearlyAbsenceRules(records, employee, out decimal totalDeduction);
+
+            return new EmployeeAttendanceReportDto
+            {
+                EmployeeId = employee.Id,
+                FullName = $"{employee.Fname} {employee.Lname}",
+                TotalDays = records.Count,
+                DaysPresent = records.Count(a => !a.IsAbsent),
+                DaysAbsent = records.Count(a => a.IsAbsent),
+                DaysLate = records.Count(a => a.IsLate),
+                TotalDeduction = totalDeduction,
+                Records = records
+            };
+        }
+
+        public async Task<List<EmployeeAttendanceReportDto>> GetReportsForManager(int managerId)
+        {
+            var manager = await _unitOfWork.EmployeeRepository.GetByIdAsync(managerId);
+
+            if (manager == null || !manager.Is_Manager)
+                return new List<EmployeeAttendanceReportDto>();
+            
+
+            var connection = _context.Database.GetDbConnection();
+            var reportsDict = new Dictionary<int, EmployeeAttendanceReportDto>();
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = "GetAttendanceReportsByManager";
+            command.CommandType = CommandType.StoredProcedure;
+            command.Parameters.Add(new SqlParameter("@ManagerId", SqlDbType.Int) { Value = managerId });
+
+            if (connection.State != ConnectionState.Open)
+                await connection.OpenAsync();
+
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                int empId = reader.GetInt32(0);
+                string fullName = reader.GetString(1);
+
+                var record = new AttendanceRecordDto
+                {
+                    Date = DateOnly.FromDateTime(reader.GetDateTime(2)),
+                    CheckIn = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+                    CheckOut = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
+                    IsLate = reader.GetBoolean(5),
+                    IsAbsent = reader.GetBoolean(6),
+                    Status = reader.GetString(7),
+                    DayDeduction = 0m
+                };
+
+                if (!reportsDict.TryGetValue(empId, out var report))
+                {
+                    report = new EmployeeAttendanceReportDto
+                    {
+                        EmployeeId = empId,
+                        FullName = fullName,
+                        Records = new List<AttendanceRecordDto>()
+                    };
+                    reportsDict.Add(empId, report);
+                }
+
+                report.Records.Add(record);
+            }
+
+            foreach (var report in reportsDict.Values)
+            {
+                foreach (var rec in report.Records)
+                {
+                    rec.DayDeduction = rec.IsAbsent
+                        ? 1m
+                        : (rec.CheckIn.HasValue ? CalculateDayDeduction(rec.CheckIn.Value) : 1m);
+                }
+                ApplyMonthlyAbsenceRules(report.Records);
+                ApplyYearlyAbsenceRules(report.Records, null, out decimal totalDeduction);
+
+                report.TotalDays = report.Records.Count;
+                report.DaysPresent = report.Records.Count(r => !r.IsAbsent);
+                report.DaysAbsent = report.Records.Count(r => r.IsAbsent);
+                report.DaysLate = report.Records.Count(r => r.IsLate);
+                report.TotalDeduction = totalDeduction;
+            }
+
+            return reportsDict.Values.ToList();
+        }
+
+
+
+        public async Task<List<LineManagerTeamSummaryDto>> GetLineManagerSummariesByDepartmentManagerAsync(
+        int departmentManagerId, DateTime startDate, DateTime endDate)
+        {
+            var deptManager = await _unitOfWork.EmployeeRepository.GetByIdAsync(departmentManagerId);
+            if (deptManager == null || !deptManager.Is_Manager)
+                return new List<LineManagerTeamSummaryDto>();
+
+            var allEmployees = await _unitOfWork.EmployeeRepository.GetAllASync();
+
+            var lineManagers = allEmployees
+                .Where(e => e.Line_Manager_Id == departmentManagerId && e.Is_Manager)
+                .ToList();
+
+            var summaries = new List<LineManagerTeamSummaryDto>();
+
+            foreach (var lm in lineManagers)
+            {
+                var reports = await GetReportsForManager(lm.Id);
+                foreach (var rep in reports)
+                {
+                    rep.Records = rep.Records
+                        .Where(r => r.Date.ToDateTime(TimeOnly.MinValue) >= startDate &&
+                                    r.Date.ToDateTime(TimeOnly.MinValue) <= endDate)
+                        .ToList();
+                }
+
+                int totalEmployees = reports.Count;
+                int totalWorkingDays = reports.Sum(r => r.Records.Count);
+                int totalAbsentDays = reports.Sum(r => r.Records.Count(r2 => r2.IsAbsent));
+                int totalLateDays = reports.Sum(r => r.Records.Count(r2 => r2.IsLate));
+
+                decimal percentAbsent = totalWorkingDays == 0
+                    ? 0
+                    : (decimal)totalAbsentDays / totalWorkingDays * 100m;
+
+                decimal percentLate = totalWorkingDays == 0
+                    ? 0
+                    : (decimal)totalLateDays / totalWorkingDays * 100m;
+
+                summaries.Add(new LineManagerTeamSummaryDto
+                {
+                    LineManagerId = lm.Id,
+                    LineManagerName = $"{lm.Fname} {lm.Lname}",
+                    TotalEmployees = totalEmployees,
+                    PercentAbsent = percentAbsent,
+                    PercentLate = percentLate,
+                    ReportDate = DateTime.Now
+                });
+            }
+
+            return summaries;
+        }
+
+
+        public async Task<List<DepartmentSummaryForCeoDto>> GetDepartmentSummariesForCeoAsync(DateTime startDate, DateTime endDate)
+        {
+
+            var employees = await _unitOfWork.EmployeeRepository.GetAllASync();
+
+            var groupedByDept = employees
+                .Where(e => e.Dept_Id != null)
+                .GroupBy(e => e.Dept_Id)
+                .ToList();
+
+            var summaries = new List<DepartmentSummaryForCeoDto>();
+
+            foreach (var grp in groupedByDept)
+            {
+                int deptId = grp.Key.Value;
+                string deptName = grp.First().Dept?.dept_name ?? "Unknown";
+
+                int totalEmployees = grp.Count();
+
+                int totalWorkingDays = 0;
+                int totalAbsentDays = 0;
+                int totalLateDays = 0;
+
+                foreach (var emp in grp)
+                {
+                    var records = await GetAttendanceRecordsFromSP(emp.Id);
+                    var filtered = records
+                        .Where(r => r.Date.ToDateTime(TimeOnly.MinValue) >= startDate
+                                 && r.Date.ToDateTime(TimeOnly.MinValue) <= endDate)
+                        .ToList();
+
+                    totalWorkingDays += filtered.Count;
+                    totalAbsentDays += filtered.Count(r => r.IsAbsent);
+                    totalLateDays += filtered.Count(r => r.IsLate);
+                }
+
+                decimal percentAbsent = totalWorkingDays == 0
+                    ? 0
+                    : (decimal)totalAbsentDays / totalWorkingDays * 100m;
+                decimal percentLate = totalWorkingDays == 0
+                    ? 0
+                    : (decimal)totalLateDays / totalWorkingDays * 100m;
+
+                summaries.Add(new DepartmentSummaryForCeoDto
+                {
+                    DepartmentId = deptId,
+                    DepartmentName = deptName,
+                    TotalEmployees = totalEmployees,
+                    PercentAbsent = percentAbsent,
+                    PercentLate = percentLate,
+                    ReportDate = DateTime.Now
+                });
+            }
+
+            return summaries;
+        }
+
+
+
+
+        private decimal CalculateDayDeduction(DateTime checkIn)
+        {
+            var baseDate = DateTime.Today;
+            var onTime = baseDate.AddHours(8).AddMinutes(30);
+            var arrivalTime = baseDate.Add(checkIn.TimeOfDay);
+
+            var quarterLate = baseDate.AddHours(9);
+            var halfLate = baseDate.AddHours(9).AddMinutes(30);
+
+            if (arrivalTime <= onTime)
+                return 0m;
+            else if (arrivalTime <= quarterLate)
+                return 0.25m;
+            else if (arrivalTime <= halfLate)
+                return 0.5m;
+            else
+                return 1m;
+        }
+
+        private void ApplyMonthlyAbsenceRules(List<AttendanceRecordDto> records)
+        {
+            var groupedByMonth = records
+                .Where(r => r.IsAbsent)
+                .GroupBy(r => r.Date.ToString("yyyy-MM"));
+
+            foreach (var monthGroup in groupedByMonth)
+            {
+                var totalHours = monthGroup
+                    .Where(r => r.CheckIn.HasValue && r.CheckOut.HasValue)
+                    .Sum(r => (r.CheckOut.Value - r.CheckIn.Value).TotalHours);
+
+                var absenceCount = monthGroup.Count();
+
+                decimal deduction = (totalHours <= 4 && absenceCount <= 2) ? 0m : 1m;
+
+                foreach (var record in monthGroup)
+                    record.DayDeduction = deduction;
+            }
+        }
+
+        private void ApplyYearlyAbsenceRules(
+            List<AttendanceRecordDto> records,
+            dynamic employee,
+            out decimal totalDeduction)
+        {
+            var currentYear = DateTime.Today.Year;
+            var resetDate = new DateTime(currentYear, 3, 1);
+            var absenceStart = DateTime.Today >= resetDate
+                ? resetDate
+                : new DateTime(currentYear - 1, 3, 1);
+
+            var yearlyAbsences = records
+                .Where(r => r.IsAbsent && r.Date.ToDateTime(TimeOnly.MinValue) >= absenceStart)
+                .ToList();
+
+            decimal usedAbsenceDays = yearlyAbsences.Sum(r => r.DayDeduction);
+            decimal baseAllowedDays = employee.Is_Manager ? 35m : 21m;
+            decimal carriedOverDays = 0m;
+            decimal totalAllowedDays = baseAllowedDays + carriedOverDays;
+
+            decimal excessDays = Math.Max(0, usedAbsenceDays - totalAllowedDays);
+
+            totalDeduction = records.Sum(r => r.DayDeduction);
+        }
+
+        private async Task<List<AttendanceRecordDto>> GetAttendanceRecordsFromSP(int employeeId)
+        {
+            var connection = _context.Database.GetDbConnection();
+            var records = new List<AttendanceRecordDto>();
+
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "GetEmployeeAttendanceReport";
+                command.CommandType = CommandType.StoredProcedure;
+
+                var param = new SqlParameter("@EmployeeId", SqlDbType.Int)
+                {
+                    Value = employeeId
+                };
+
+                command.Parameters.Add(param);
+
+                if (connection.State != ConnectionState.Open)
+                    await connection.OpenAsync();
+
+                using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    records.Add(new AttendanceRecordDto
+                    {
+                        Date = DateOnly.FromDateTime(reader.GetDateTime(0)),
+                        CheckIn = reader.IsDBNull(1) ? null : reader.GetDateTime(1),
+                        CheckOut = reader.IsDBNull(2) ? null : reader.GetDateTime(2),
+                        IsLate = reader.GetBoolean(3),
+                        IsAbsent = reader.GetBoolean(4),
+                        Status = reader.GetString(5),
+                        DayDeduction = 0m
+                    });
+                }
+            }
+
+            return records;
+        }
+    }
+}
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Services\AuthService.cs =====
+using BussinessLogic.Models._EmployeeDto;
+using BussinessLogic.ServicesAbstraction;
+using BussinessLogic.ViewModels;
+using DataAccess.Data._UnitOfWork;
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+
+public class AuthService : IAuthService
+{
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IConfiguration _config;
+
+    public AuthService(IUnitOfWork unitOfWork, IConfiguration config)
+    {
+        _unitOfWork = unitOfWork;
+        _config = config;
+    }
+
+    public async Task<ApiResponse<bool>> Register(CreatedEmployeeDto dto)
+    {
+        var exists = await _unitOfWork.EmployeeRepository.AnyAsync(e => e.UserName == dto.UserName);
+        if (exists)
+            return new ApiResponse<bool> { Code = 400, Status = "error", Message = "User already exists" };
+
+        var employee = new Employee
+        {
+            UserName = dto.UserName,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
+            Role = dto.Role
+        };
+
+        await _unitOfWork.EmployeeRepository.AddAsync(employee);
+        _unitOfWork.Complete();
+
+        return new ApiResponse<bool>
+        {
+            Code = 200,
+            Status = "success",
+            Message = "User registered successfully",
+            Data = true
+        };
+    }
+
+
+    public async Task<ApiResponse<string>> Login(string username, string password)
+    {
+        var user = (await _unitOfWork.EmployeeRepository.GetAllASync())
+                        .FirstOrDefault(e => e.UserName == username);
+
+        if (user == null)
+            return new ApiResponse<string> { Code = 401, Status = "error", Message = "Invalid credentials" };
+
+        if (string.IsNullOrWhiteSpace(user.PasswordHash) || !user.PasswordHash.StartsWith("$2"))
+        {
+            return new ApiResponse<string>
+            {
+                Code = 500,
+                Status = "error",
+                Message = "Stored password hash is invalid or not using bcrypt format."
+            };
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+            return new ApiResponse<string> { Code = 401, Status = "error", Message = "Invalid credentials" };
+
+    var token = GenerateJwtToken(user);
+
+        return new ApiResponse<string>
+        {
+            Code = 200,
+            Status = "Success",
+            Message = "Login successful",
+            Data = token
+        };
+    }
+
+
+    private string GenerateJwtToken(Employee user)
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.Name, user.UserName),
+            new Claim(ClaimTypes.Role, user.Role),
+            new Claim("EmployeeId", user.Id.ToString())
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: _config["Jwt:Issuer"],
+            audience: _config["Jwt:Audience"],
+            claims: claims,
+            expires: DateTime.Now.AddHours(3),
+            signingCredentials: creds
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Services\DepartmentService.cs =====
+using BussinessLogic.Models._DepartmentDto;
+using BussinessLogic.ServicesAbstraction;
+using DataAccess.Data._UnitOfWork;
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Entities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Services
+{
+    public class DepartmentService : IDepartmentService
+    {
+        private readonly IUnitOfWork _unitOfWork;
+
+        public DepartmentService(IUnitOfWork unitOfWork)
+        {
+            _unitOfWork = unitOfWork;
+        }
+
+        public IEnumerable<DepartmentDetailsDto> GetAllDepartments()
+        {
+            var departments = _unitOfWork.DepartmentRepository
+                .GetAllAsIQueryable()
+                .Where(e => !e.IsDeleted)
+                .Select(dept => new DepartmentDetailsDto
+                {
+                    Id = dept.Id,
+                    dept_name = dept.dept_name,
+                    subCompany_id = dept.sub_id,
+                    Manager_Id = dept.Manager_Id,
+                    subCompanyName = dept.sub != null ? dept.sub.Sub_Name : null,
+                    ManagerName = dept.Manager != null ? $"{dept.Manager.Fname} {dept.Manager.Lname}" : null
+                }).ToList();
+
+            return departments;
+        }
+
+        public async Task<DepartmentDetailsDto?> GetByIdAsync(int id)
+        {
+            var dept = await _unitOfWork.DepartmentRepository.GetByIdAsync(id);
+            if (dept is not null)
+            {
+                return new DepartmentDetailsDto
+                {
+                    Id = dept.Id,
+                    dept_name = dept.dept_name,
+                    subCompany_id = dept.sub_id,
+                    Manager_Id = dept.Manager_Id,
+                    subCompanyName = dept.sub != null ? dept.sub.Sub_Name : null,
+                    ManagerName = dept.Manager != null ? $"{dept.Manager.Fname} {dept.Manager.Lname}" : null
+                };
+            }
+            return null;
+        }
+
+        public async Task<int> CreateDepartment(CreatedDepartmentDto dto)
+        {
+            var Dept = new Department
+            {
+                dept_name = dto.dept_name,
+                sub_id = dto.sub_id,
+                Manager_Id = dto.Manager_Id
+            };
+
+            await _unitOfWork.DepartmentRepository.AddAsync(Dept);
+            return _unitOfWork.Complete();
+    
+        }
+
+        public async Task<bool> UpdateDepartment(UpdatedDepartmentDto dto, int id)
+        {
+            var dept = await _unitOfWork.DepartmentRepository.GetByIdAsync(id);
+            if (dept is null || id != dept.Id)
+                return false;
+
+
+            dept.dept_name = dto.dept_name;
+            dept.sub_id = dto.sub_id;
+            dept.Manager_Id = dto.Manager_Id;
+            
+            await _unitOfWork.DepartmentRepository.UpdateAsync(dept);
+           return  _unitOfWork.Complete() > 0;
+        }
+
+        public async Task<bool> DeleteDepartment(int id)
+        {
+            var dept = await _unitOfWork.DepartmentRepository.GetByIdAsync(id);
+            if (dept is not null)
+            {
+                await _unitOfWork.DepartmentRepository.DeleteAsync(dept);
+                return _unitOfWork.Complete() > 0;
+            }
+
+            return false;
+        }
+    }
+   
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Services\EmployeeServices.cs =====
+using BussinessLogic.Models._EmployeeDto;
+using BussinessLogic.ServicesAbstraction;
+using DataAccess.Data._UnitOfWork;
+using DataAccess.Data.DbContext;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.Services
+{
+    public class EmployeeServices : IEmployeeServices
+    {
+        private readonly IUnitOfWork _unitOfWork;
+
+        public EmployeeServices(IUnitOfWork unitOfWork)
+        {
+            _unitOfWork = unitOfWork;
+        }
+        public IEnumerable<EmployeeDetailsDto> GetAllEmployees()
+        {
+            var employees = _unitOfWork.EmployeeRepository
+                .GetAllAsIQueryable()
+                .Where(e => !e.IsDeleted)
+                .Include(e => e.Dept)
+                .Select(employee => new EmployeeDetailsDto
+                {
+                    Emp_Id = employee.Id,
+                    FirstName = employee.Fname,
+                    LastName = employee.Lname,
+                    Emp_Phone = employee.Emp_Phone,
+                    Email = employee.Email,
+                    Is_Manager = employee.Is_Manager,
+                    Line_Manager_Id = employee.Line_Manager_Id,
+                    Dept_Id = employee.Dept_Id,
+                    Department = employee.Dept != null ? employee.Dept.dept_name : null
+                }).ToList();
+
+            return employees;
+        }   
+
+        public async Task<EmployeeDetailsDto?> GetEmployeeById(int id)
+        {
+            var employee = await _unitOfWork.EmployeeRepository.GetByIdAsync(id);
+            if (employee is not null)
+               return new EmployeeDetailsDto()
+               {
+                   Emp_Id = employee.Id,
+                   FirstName = employee.Fname,
+                   LastName = employee.Lname,
+                   Emp_Phone = employee.Emp_Phone,
+                   Email = employee.Email,
+                   Is_Manager = employee.Is_Manager,
+                   Line_Manager_Id = employee.Line_Manager_Id,
+                   Dept_Id = employee.Dept_Id,
+                   Department = employee.Dept != null ? employee.Dept.dept_name : null
+               };
+            return null;
+        }
+        public async Task<int> CreateEmployee(CreatedEmployeeDto employee)
+        {
+            var Emp = new Employee()
+            {
+                Fname = employee.FirstName,
+                Lname = employee.LastName,
+                Emp_Phone = employee.Emp_Phone,
+                Email = employee.Email,
+                Is_Manager = employee.Is_Manager,
+                Line_Manager_Id = employee.Line_Manager_Id,
+                UserName = employee.UserName,
+                PasswordHash = employee.Password,
+                Dept_Id = employee.Dept_Id
+            };
+
+            await _unitOfWork.EmployeeRepository.AddAsync(Emp);
+            return  _unitOfWork.Complete();
+        }
+        
+        public async Task<int> UpdateEmployee(UpdatedEmployeeDto employee, int id)
+        {
+            var em = _unitOfWork.EmployeeRepository.GetByIdAsync(id);
+            if (em is null || id != em.Id)
+                return 0;
+
+            var Emp = new Employee()
+            {
+                Fname = employee.FirstName,
+                Lname = employee.LastName,
+                Emp_Phone = employee.Emp_Phone,
+                Email = employee.Email,
+                Is_Manager = employee.Is_Manager,
+                Line_Manager_Id = employee.Line_Manager_Id,
+                UserName = employee.UserName,
+                PasswordHash = employee.Password,
+                Dept_Id = employee.Dept_Id
+            };
+
+            await _unitOfWork.EmployeeRepository.UpdateAsync(Emp);
+            return _unitOfWork.Complete();
+        }
+
+        public async Task<bool> DeleteEmployee(int id)
+        {
+            var employee = _unitOfWork.EmployeeRepository.GetByIdAsync(id).Result;
+
+            if (employee is not null)
+               await _unitOfWork.EmployeeRepository.DeleteAsync(employee);
+
+            return _unitOfWork.Complete() > 0;
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\Services\Sub_CompanyService.cs =====
+using BussinessLogic.Models._SubCompanyDto;
+using BussinessLogic.ServicesAbstraction;
+using DataAccess.Data._UnitOfWork;
+using DataAccess.Data.DbContext;
+
+public class Sub_CompanyService : ISub_CompanyService
+{
+    private readonly IUnitOfWork _unitOfWork;
+
+    public Sub_CompanyService(IUnitOfWork unitOfWork)
+    {
+        _unitOfWork = unitOfWork;
+    }
+
+    public async Task<IEnumerable<SubCompanyDetailsDto>> GetAllAsync()
+    {
+        var subs = await _unitOfWork.SubCompanyRepository.GetAllASync();
+        return subs
+            .Where(e => !e.IsDeleted)
+            .Select(s => new SubCompanyDetailsDto
+            {
+                Company_Id = s.Id,
+                Company_Name = s.Sub_Name,
+                Company_Address = s.Address,
+                Company_Phone = s.Sub_Phone,
+                CEO_Id = s.CEO_id
+            });
+    }
+
+    public async Task<SubCompanyDetailsDto?> GetByIdAsync(int id)
+    {
+        var sub = await _unitOfWork.SubCompanyRepository.GetByIdAsync(id);
+        if (sub == null) return null;
+
+        return new SubCompanyDetailsDto
+        {
+            Company_Id = sub.Id,
+            Company_Name = sub.Sub_Name,
+            Company_Address = sub.Address,
+            Company_Phone = sub.Sub_Phone,
+            CEO_Id = sub.CEO_id
+        };
+    }
+
+    public async Task<int> AddAsync(CreatedSubCompanyDto dto)
+    {
+        var entity = new Sub_Company
+        {
+            Sub_Name = dto.Company_Name,
+            Address = dto.Company_Address,
+            Sub_Phone = dto.Company_Phone,
+            CEO_id = dto.CEO_Id
+        };
+
+        await _unitOfWork.SubCompanyRepository.AddAsync(entity);
+        _unitOfWork.Complete();
+        return entity.Id; 
+    }
+
+    public async Task<bool> UpdateAsync(int id, UpdatedSubCompanyDto dto)
+    {
+        var sub = await _unitOfWork.SubCompanyRepository.GetByIdAsync(id);
+        if (sub == null) return false;
+
+        sub.Sub_Name = dto.Company_Name;
+        sub.Address = dto.Company_Address;
+        sub.Sub_Phone = dto.Company_Phone;
+        sub.CEO_id = dto.CEO_Id;
+
+        await _unitOfWork.SubCompanyRepository.UpdateAsync(sub);
+        return _unitOfWork.Complete() > 0;
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var sub = await _unitOfWork.SubCompanyRepository.GetByIdAsync(id);
+        if (sub == null) return false;
+
+        await _unitOfWork.SubCompanyRepository.DeleteAsync(sub);
+        return _unitOfWork.Complete() > 0;
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\ServicesAbstraction\IAttendanceService.cs =====
+using BussinessLogic.Models._AttendanceDto;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.ServicesAbstraction
+{
+    public interface IAttendanceService
+    {
+        Task<EmployeeAttendanceReportDto?> GetEmployeeAttendanceReport(int employeeId);
+        public  Task<List<EmployeeAttendanceReportDto>> GetReportsForManager(int managerId);
+        Task<List<LineManagerTeamSummaryDto>> GetLineManagerSummariesByDepartmentManagerAsync(int departmentManagerId, DateTime startDate, DateTime endDate);
+        Task<List<DepartmentSummaryForCeoDto>> GetDepartmentSummariesForCeoAsync(DateTime startDate, DateTime endDate);
+
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\ServicesAbstraction\IAuthService.cs =====
+using BussinessLogic.Models._EmployeeDto;
+using BussinessLogic.ViewModels;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.ServicesAbstraction
+{
+    public interface IAuthService
+    {
+        Task<ApiResponse<bool>> Register(CreatedEmployeeDto dto);
+        Task<ApiResponse<string>> Login(string username, string password);
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\ServicesAbstraction\IDepartmentService.cs =====
+using BussinessLogic.Models._DepartmentDto;
+using DataAccess.Data.DbContext;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.ServicesAbstraction
+{
+    public interface IDepartmentService
+    {
+        IEnumerable<DepartmentDetailsDto> GetAllDepartments();
+
+        Task<DepartmentDetailsDto?> GetByIdAsync(int id);
+
+        Task<int> CreateDepartment(CreatedDepartmentDto dto);
+
+        Task<bool> UpdateDepartment(UpdatedDepartmentDto dto, int id);
+
+        Task<bool> DeleteDepartment(int id);
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\ServicesAbstraction\IEmployeeServices.cs =====
+using BussinessLogic.Models._EmployeeDto;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.ServicesAbstraction
+{
+    public interface IEmployeeServices
+    {
+        IEnumerable<EmployeeDetailsDto> GetAllEmployees();
+        Task<EmployeeDetailsDto?> GetEmployeeById(int id);
+        Task<int> CreateEmployee(CreatedEmployeeDto employee);
+        Task<int> UpdateEmployee(UpdatedEmployeeDto employee, int id); 
+        Task<bool> DeleteEmployee(int id);
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\ServicesAbstraction\ISub_CompanyService.cs =====
+using BussinessLogic.Models._SubCompanyDto;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.ServicesAbstraction
+{
+    public interface ISub_CompanyService
+    {
+        Task<IEnumerable<SubCompanyDetailsDto>> GetAllAsync();
+        Task<SubCompanyDetailsDto?> GetByIdAsync(int id);
+        Task<int> AddAsync(CreatedSubCompanyDto dto);
+        Task<bool> UpdateAsync(int id, UpdatedSubCompanyDto dto);
+        Task<bool> DeleteAsync(int id);
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\ViewModels\ApiResponse.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace BussinessLogic.ViewModels
+{
+    public class ApiResponse<T>
+    {
+        public int Code { get; set; }
+        public string Status { get; set; }
+        public string Message { get; set; }
+        public T Data { get; set; }
+    
+    }
+
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\BussinessLogic\BussinessLogic.csproj =====
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DataAccess\DataAccess.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.20" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.20">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.SqlServer.Server" Version="1.0.0" />
+  </ItemGroup>
+
+</Project>
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Entities\Attendance.cs =====
+// <auto-generated> This file has been auto generated by EF Core Power Tools. </auto-generated>
+#nullable disable
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using DataAccess.Data.DbContext;
+using Microsoft.EntityFrameworkCore;
+
+namespace DataAccess.Data.Entities;
+
+[PrimaryKey("Emp_Id", "Att_Date")]
+[Table("Attendance")]
+public partial class Attendance : BaseEntity
+{
+    [Key]
+    public int Emp_Id { get; set; }
+
+    [Key]
+    public DateOnly Att_Date { get; set; }
+
+    [Column(TypeName = "datetime")]
+    public DateTime? Check_in { get; set; }
+
+    [Column(TypeName = "datetime")]
+    public DateTime? Check_out { get; set; }
+
+    public bool Is_Late { get; set; }
+
+    public bool Is_Absent { get; set; }
+
+    [StringLength(50)]
+    public string Status { get; set; }
+
+    [ForeignKey("Emp_Id")]
+    [InverseProperty("Attendances")]
+    public virtual Employee Emp { get; set; }
+}
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Entities\BaseEntity.cs =====
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Entities
+{
+    public class BaseEntity
+    {
+        public virtual bool IsDeleted { get; set; }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Entities\Department.cs =====
+// <auto-generated> This file has been auto generated by EF Core Power Tools. </auto-generated>
+#nullable disable
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using DataAccess.Data.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace DataAccess.Data.DbContext;
+
+[Table("Department")]
+public partial class Department : BaseEntity
+{
+    [Key]
+    public int Id { get; set; }
+
+    [StringLength(50)]
+    public string dept_name { get; set; }
+
+    public int sub_id { get; set; }
+
+    public int? Manager_Id { get; set; }
+
+    [InverseProperty("Dept")]
+    public virtual ICollection<Employee> Employees { get; set; } = new List<Employee>();
+
+    [ForeignKey("Manager_Id")]
+    [InverseProperty("Departments")]
+    public virtual Employee Manager { get; set; }
+
+    [ForeignKey("sub_id")]
+    [InverseProperty("Departments")]
+    public virtual Sub_Company sub { get; set; }
+}
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Entities\Employee.cs =====
+// <auto-generated> This file has been auto generated by EF Core Power Tools. </auto-generated>
+#nullable disable
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using DataAccess.Data.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace DataAccess.Data.DbContext;
+
+[Table("Employee")]
+public partial class Employee : BaseEntity
+{
+    [Key]
+    public int Id { get; set; }
+
+    [StringLength(30)]
+    public string Fname { get; set; }
+
+    [StringLength(30)]
+    public string Lname { get; set; }
+
+    public string? Emp_Phone { get; set; }
+
+    [StringLength(50)]
+    public string Email { get; set; }
+    public string Role { get; set; }
+
+    public bool Is_Manager { get; set; }
+    public int? Line_Manager_Id { get; set; }
+
+    [StringLength(50)]
+    public string UserName { get; set; }
+
+    [StringLength(256)]
+    public string PasswordHash { get; set; }
+
+    public int? Dept_Id { get; set; }
+
+    [ForeignKey("Line_Manager_Id")]
+    [InverseProperty("Subordinates")]
+    public Employee LineManager { get; set; }
+
+    [InverseProperty("LineManager")]
+    public ICollection<Employee> Subordinates { get; set; }
+
+    [InverseProperty("Emp")]
+    public virtual ICollection<Attendance> Attendances { get; set; } = new List<Attendance>();
+
+    [InverseProperty("Manager")]
+    public virtual ICollection<Department> Departments { get; set; } = new List<Department>();
+
+    [ForeignKey("Dept_Id")]
+    [InverseProperty("Employees")]
+    public virtual Department Dept { get; set; }
+
+    [InverseProperty("CEO")]
+    public virtual ICollection<Sub_Company> Sub_Companies { get; set; } = new List<Sub_Company>();
+}
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Entities\Sub_Company.cs =====
+// <auto-generated> This file has been auto generated by EF Core Power Tools. </auto-generated>
+#nullable disable
+using DataAccess.Data.Entities;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace DataAccess.Data.DbContext;
+
+[Table("Sub_Company")]
+public partial class Sub_Company : BaseEntity
+{
+    [Key]
+    public int Id { get; set; }
+
+    [StringLength(30)]
+    public string Sub_Name { get; set; }
+
+    [StringLength(50)]
+    public string Address { get; set; }
+
+    public int? Sub_Phone { get; set; }
+
+    public int CEO_id { get; set; }
+
+    [ForeignKey("CEO_id")]
+    [InverseProperty("Sub_Companies")]
+    public virtual Employee CEO { get; set; }
+
+    [InverseProperty("sub")]
+    public virtual ICollection<Department> Departments { get; set; } = new List<Department>();
+}
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_AttendanceRepository\AttendanceRepository.cs =====
+using DataAccess.Data.Entities;
+using DataAccess.Data.Repositories._GenericRepository;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Repositories._AttendanceRepository
+{
+    public class AttendanceRepository : GenericRepository<Attendance> ,IAttendanceRepository
+    {
+        private readonly Attendance_SystemContext _context;
+
+        public AttendanceRepository(Attendance_SystemContext context) : base(context)
+        {
+            _context = context;
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_AttendanceRepository\IAttendanceRepository.cs =====
+using DataAccess.Data.Entities;
+using DataAccess.Data.Repositories._GenericRepository;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Repositories._AttendanceRepository
+{
+    public interface IAttendanceRepository : IGenericRepository<Attendance>
+    {
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_DepartmentRepository\DepartmentRepository.cs =====
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Repositories._GenericRepository;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Repositories._DepartmentRepository
+{
+    public class DepartmentRepository : GenericRepository<Department>, IDepartmentRepository
+    {
+        public DepartmentRepository(Attendance_SystemContext context) : base(context)
+        {
+            
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_DepartmentRepository\IDepartmentRepository.cs =====
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Repositories._GenericRepository;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Repositories._DepartmentRepository
+{
+    public interface IDepartmentRepository : IGenericRepository<Department>
+    {
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_EmployeeRepository\EmployeeRepository.cs =====
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Entities;
+using DataAccess.Data.Repositories._GenericRepository;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Linq.Expressions;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Repositories._EmployeeRepository
+{
+    public class EmployeeRepository : GenericRepository<Employee>, IEmployeeRepository
+    {
+        public EmployeeRepository(Attendance_SystemContext dbContext) : base(dbContext)
+        {
+        }
+
+        public override async Task<IEnumerable<Employee>> GetAllASync()
+        {
+            return await _context.Set<Employee>()
+                         .Include(e => e.Dept)
+                         .Where(e => !e.IsDeleted)
+                         .ToListAsync();
+        }
+
+        public async Task<bool> AnyAsync(Expression<Func<Employee, bool>> predicate)
+        {
+            return await _context.Employees.AnyAsync(predicate);
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_EmployeeRepository\IEmployeeRepository.cs =====
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Repositories._GenericRepository;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Repositories._EmployeeRepository
+{
+    public interface IEmployeeRepository : IGenericRepository<Employee>
+    {
+        Task<bool> AnyAsync(Expression<Func<Employee, bool>> predicate);
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_Generic\GenericRepository.cs =====
+using DataAccess.Data.DbContext;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using DataAccess.Data.Entities;
+
+namespace DataAccess.Data.Repositories._GenericRepository
+{
+    public class GenericRepository<T> : IGenericRepository<T> where T : BaseEntity
+    {
+        protected readonly Attendance_SystemContext _context;
+
+        public GenericRepository(Attendance_SystemContext context)
+        {
+           _context = context;
+        }
+        public virtual async Task<IEnumerable<T>> GetAllASync()
+        { 
+            return await _context.Set<T>().Where(e => !e.IsDeleted).ToListAsync(); 
+        }
+
+        public IQueryable<T> GetAllAsIQueryable() => _context.Set<T>();
+        
+        public virtual async Task<T?> GetByIdAsync(int id) => await _context.Set<T>().FindAsync(id);
+
+
+        public async Task AddAsync(T entity) => await _context.Set<T>().AddAsync(entity);
+        
+        public async Task<bool> UpdateAsync(T entity) {
+              _context.Set<T>().Update(entity);
+             return await _context.SaveChangesAsync() > 0;
+        }
+
+        public async Task<bool> DeleteAsync(T entity)
+        {
+            entity.IsDeleted = true;
+            _context.Update(entity);
+            return await _context.SaveChangesAsync() > 0;
+        }
+
+        
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_Generic\IGenericRepository.cs =====
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Entities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Repositories._GenericRepository
+{
+    public interface IGenericRepository<T> where T : BaseEntity
+    {
+        Task<IEnumerable<T>> GetAllASync();
+        IQueryable<T> GetAllAsIQueryable();
+        Task<T?> GetByIdAsync(int id);
+        Task AddAsync(T entity);
+        Task<bool> UpdateAsync(T entity);
+        Task<bool> DeleteAsync(T entity);
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_SubCRepository\ISubCompanyRepository.cs =====
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Repositories._GenericRepository;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Repositories._SubCRepository
+{
+    public interface ISubCompanyRepository : IGenericRepository<Sub_Company>
+    {
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Repositories\_SubCRepository\SubCompanyRepository.cs =====
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Repositories._GenericRepository;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data.Repositories._SubCRepository
+{
+    public class SubCompanyRepository : GenericRepository<Sub_Company> ,ISubCompanyRepository
+    {
+        public SubCompanyRepository(Attendance_SystemContext context) : base(context)
+        {
+            
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\_UnitOfWork\IUnitOfWork.cs =====
+
+ï»¿using DataAccess.Data.DbContext;
+
+using DataAccess.Data.Repositories._AttendanceRepository;
+using DataAccess.Data.Repositories._DepartmentRepository;
+using DataAccess.Data.Repositories._EmployeeRepository;
+using DataAccess.Data.Repositories._GenericRepository;
+using DataAccess.Data.Repositories._SubCRepository;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data._UnitOfWork
+{
+    public interface IUnitOfWork : IDisposable
+    {
+
+        IEmployeeRepository EmployeeRepository { get; }
+        IDepartmentRepository DepartmentRepository { get; }
+        IAttendanceRepository AttendanceRepository { get; }
+        ISubCompanyRepository SubCompanyRepository { get; }
+
+        public int Complete();
+        public void Dispose();
+    }
+   
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\_UnitOfWork\UnitOfWork.cs =====
+using DataAccess.Data.Repositories._AttendanceRepository;
+using DataAccess.Data.Repositories._DepartmentRepository;
+using DataAccess.Data.Repositories._EmployeeRepository;
+using DataAccess.Data.Repositories._SubCRepository;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DataAccess.Data._UnitOfWork
+{
+    public class UnitOfWork : IUnitOfWork
+    {
+        private readonly Attendance_SystemContext _dbContext;
+
+        public UnitOfWork(Attendance_SystemContext context)
+        {
+            _dbContext = context;
+        }
+        public IEmployeeRepository EmployeeRepository => new EmployeeRepository(_dbContext);
+        public IDepartmentRepository DepartmentRepository => new DepartmentRepository(_dbContext);
+        public IAttendanceRepository AttendanceRepository => new AttendanceRepository(_dbContext);
+        public ISubCompanyRepository SubCompanyRepository => new SubCompanyRepository(_dbContext);
+        public int Complete()
+        {
+            return _dbContext.SaveChanges();
+        }
+
+        public void Dispose()
+        {
+            _dbContext.Dispose();
+        }
+    }
+}
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\Data\Attendance_SystemContext.cs =====
+// <auto-generated> This file has been auto generated by EF Core Power Tools. </auto-generated>
+#nullable disable
+using System;
+using System.Collections.Generic;
+using DataAccess.Data.DbContext;
+using DataAccess.Data.Entities;
+using Microsoft.EntityFrameworkCore;
+
+
+public partial class Attendance_SystemContext : DbContext
+{
+    public Attendance_SystemContext()
+    {
+    }
+
+    public Attendance_SystemContext(DbContextOptions<Attendance_SystemContext> options)  : base(options)
+    {
+    }
+
+    public virtual DbSet<Attendance> Attendances { get; set; }
+
+    public virtual DbSet<Department> Departments { get; set; }
+
+    public virtual DbSet<Employee> Employees { get; set; }
+
+    public virtual DbSet<Sub_Company> Sub_Companies { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Attendance>(entity =>
+        {
+            entity.HasKey(e => new { e.Emp_Id, e.Att_Date }).HasName("PK__Attendan__7683302DAE97C208");
+
+            entity.Property(e => e.Emp_Id).ValueGeneratedOnAdd();
+
+            entity.HasOne(d => d.Emp).WithMany(p => p.Attendances)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__Attendanc__Emp_I__3E52440B");
+        });
+
+        modelBuilder.Entity<Department>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Departme__3214EC0799B3CDCB");
+
+            entity.HasOne(d => d.Manager).WithMany(p => p.Departments).HasConstraintName("FK__Departmen__Manag__403A8C7D");
+
+            entity.HasOne(d => d.sub).WithMany(p => p.Departments).HasConstraintName("FK__Departmen__sub_i__3B75D760");
+        });
+
+        modelBuilder.Entity<Employee>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Employee__3214EC07874F08C1");
+
+            entity.HasOne(d => d.LineManager).WithMany(p => p.Subordinates)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__Employee__Line_M__5AEE82B9");
+
+            entity.Property(e => e.Role)
+                .HasDefaultValue("Employee");
+        });
+
+        OnModelCreatingPartial(modelBuilder);
+
+        modelBuilder.Entity<Sub_Company>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Sub_Comp__3214EC07D1AA35C4");
+
+            entity.HasOne(d => d.CEO).WithMany(p => p.Sub_Companies).HasConstraintName("FK__Sub_Compa__CEO_i__38996AB5");
+        });
+
+        OnModelCreatingPartial(modelBuilder);
+    }
+
+    partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\DataAccess.csproj =====
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.20" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.20">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
+
+===== C:\Users\SoftLaptop\Downloads\Attendance_system-master\DataAccess\efpt.config.json =====
+{
+   "CodeGenerationMode": 4,
+   "ContextClassName": "Attendance_SystemContext",
+   "ContextNamespace": null,
+   "FilterSchemas": false,
+   "IncludeConnectionString": true,
+   "MinimumProductVersion": "2.6.1080",
+   "ModelNamespace": null,
+   "OutputContextPath": null,
+   "OutputPath": "Data\/DbContext",
+   "PreserveCasingWithRegex": true,
+   "ProjectRootNamespace": "DataAccess",
+   "Schemas": null,
+   "SelectedHandlebarsLanguage": 2,
+   "SelectedToBeGenerated": 0,
+   "T4TemplatePath": null,
+   "Tables": [
+      {
+         "Name": "[dbo].[Employee]",
+         "ObjectType": 0
+      }
+   ],
+   "UiHint": null,
+   "UncountableWords": null,
+   "UseAsyncStoredProcedureCalls": true,
+   "UseBoolPropertiesWithoutDefaultSql": false,
+   "UseDatabaseNames": true,
+   "UseDatabaseNamesForRoutines": true,
+   "UseDateOnlyTimeOnly": true,
+   "UseDbContextSplitting": false,
+   "UseDecimalDataAnnotationForSprocResult": true,
+   "UseFluentApiOnly": false,
+   "UseHandleBars": false,
+   "UseHierarchyId": false,
+   "UseInflector": true,
+   "UseInternalAccessModifiersForSprocsAndFunctions": false,
+   "UseLegacyPluralizer": false,
+   "UseManyToManyEntity": false,
+   "UseNoDefaultConstructor": false,
+   "UseNoNavigations": false,
+   "UseNoObjectFilter": false,
+   "UseNodaTime": false,
+   "UseNullableReferences": false,
+   "UsePrefixNavigationNaming": false,
+   "UseSchemaFolders": false,
+   "UseSchemaNamespaces": false,
+   "UseSpatial": false,
+   "UseT4": false,
+   "UseT4Split": false
+}
