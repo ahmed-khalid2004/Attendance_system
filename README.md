@@ -570,10 +570,6 @@ This project is licensed under the **MIT License**.
 
 **Rationale:** The MIT License is permissive, allows commercial use, and encourages open collaboration while providing liability protection for contributors.
 
-```
-MIT License
-
-```
 
 ## Notes / Known Issues
 
